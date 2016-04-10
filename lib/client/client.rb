@@ -31,16 +31,35 @@ module Ava
         @client_id = response
         true
       else
-        raise 'Error retrieving client_id from host: ' + response.to_s
+        false
       end
     end
 
-    def object_list
-      request(:controller, :object_list)
+    def registered_objects
+      request(:controller, :registered_objects)
+    end
+
+    def required_gems
+      request(:controller, :required_gems)
+    end
+
+    def missing_gems
+      required_gems - Gem.loaded_specs.keys
+    end
+
+    def require_missing_gems
+      missing_gems.map do |gem|
+        begin
+          require gem
+          [gem, true]
+        rescue
+          [gem, false]
+        end
+      end.to_h
     end
 
     def method_missing *args, **named
-      if args.size == 1 && (named == {} || named.nil?) && object_list.any?{ |o| o.to_sym == args.first}
+      if args.size == 1 && (named == {} || named.nil?) && registered_objects.any?{ |o| o.to_sym == args.first}
         Replicant.new args.first, self
       else
         request args.first, args[1], *args[2..-1], **named
