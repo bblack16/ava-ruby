@@ -6,6 +6,7 @@ require 'bblib'
 require 'socket'
 require 'json'
 require 'yaml'
+require 'securerandom'
 require 'openssl'
 require 'digest/sha1'
 
