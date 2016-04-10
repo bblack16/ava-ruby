@@ -1,18 +1,17 @@
 module Ava
 
   class Controller
-    attr_reader :objects, :blacklist, :whitelist, :secret_key, :port, :thread, :connections,
-                :allowed_connections, :encrypt, :secure
+    attr_reader :objects, :blacklist, :whitelist, :key, :port, :thread, :connections,
+                :allowed_connections, :encrypt
 
     def initialize *args, **named
       @objects, @connections = {}, {}
       @whitelist, @blacklist = {methods:[]}, {methods:[:eval]}
       @allowed_connections = nil
       setup_defaults
-      self.secret_key = named.include?(:secret_key) ? named[:secret_key] : SecureRandom.hex(20)
+      self.key = named.include?(:key) ? named[:key] : SecureRandom.hex(20)
       self.port = named.include?(:port) ? named[:port] : 2016
       self.encrypt = named.include?(:encrypt) ? named[:encrypt] : true
-      self.secure = named.include?(:secure) ? named[:secure] : true
       listen if named.include?(:start) && named[:start]
     end
 
@@ -20,12 +19,8 @@ module Ava
       @encrypt = e == true
     end
 
-    def secure= s
-      @secure = s == true
-    end
-
-    def secret_key= key
-      @secret_key = key.to_s
+    def key= key
+      @key = key.to_s
     end
 
     def port= port
@@ -58,6 +53,10 @@ module Ava
       end
     end
 
+    def allow_connections *connections
+      @allowed_connections = connections.first.nil? ? nil : connections
+    end
+
     def remove name
       @objects.delete name unless name == :controller
     end
@@ -88,12 +87,16 @@ module Ava
       blacklist object, :_all
     end
 
-    def blacklist_method *methods
+    def blacklist_global *methods
       @blacklist[:methods]+=methods
     end
 
-    def object_list
+    def registered_objects
       @objects.keys
+    end
+
+    def required_gems
+      Gem.loaded_specs.keys
     end
 
     def parse_command cmd
@@ -153,7 +156,7 @@ module Ava
                   encrypt = true
                   msg = decrypt_msg(remote_ip, YAML.load(client.recv(100000)))
                   if msg[:controller] && msg[:controller][:secret_key]
-                    if msg[:controller][:secret_key][:args].first == @secret_key
+                    if msg[:controller][:secret_key][:args].first == @key
                       response = {status:200, response: register_client(remote_ip)}
                       encrypt = false
                     else
@@ -183,7 +186,7 @@ module Ava
 
       def register_client addr
         return "Your IP is not allowed: #{addr}" unless validate_ip(addr)
-        client_id = Digest::SHA1.hexdigest("#{addr}|#{@secret_key}")
+        client_id = Digest::SHA1.hexdigest("#{addr}|#{@key}")
         iv = @cipher.random_iv
         @connections[addr] = {key: client_id, iv: iv, encrypt: @encrypt}
       end
@@ -203,7 +206,6 @@ module Ava
 
       def verify_connection ip, msg
         return false unless msg.include?(:client_id)
-        return true if !@secure
         @connections.include?(ip) && @connections[ip][:key] == msg.delete(:client_id)
       end
 
@@ -214,7 +216,8 @@ module Ava
           :port,
           :restart,
           :running?,
-          :object_list
+          :registered_objects,
+          :required_gems
         ]
         @cipher = OpenSSL::Cipher::Cipher.new('aes-256-cbc')
       end
