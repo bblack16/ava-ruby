@@ -80,6 +80,22 @@ module Ava
       @response[:response] ? @response[:response] : (raise @response[:error])
     end
 
+    def send_file bits, save_to = ''
+      request :send_file, :send_file, bits, path: save_to
+    end
+
+    def get_file path, save_to = Dir.pwd
+      save_to+= path.file_name if File.directory?(save_to)
+      File.open(save_to, 'w') do |file|
+        file.write(read_file(path))
+      end
+      File.exists?(save_to)
+    end
+
+    def read_file path
+      request :get_file, :get_file, path: path
+    end
+
     def encrypt_msg msg
       return msg if !@client_id[:encrypt]
       cipher = OpenSSL::Cipher::Cipher.new("aes-256-cbc")

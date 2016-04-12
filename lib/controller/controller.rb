@@ -2,7 +2,7 @@ module Ava
 
   class Controller
     attr_reader :objects, :blacklist, :whitelist, :key, :port, :thread, :connections,
-                :allowed_connections, :encrypt
+                :allowed_connections, :encrypt, :allow_send, :allow_get
 
     def initialize *args, **named
       @objects, @connections = {}, {}
@@ -12,11 +12,21 @@ module Ava
       self.key = named.include?(:key) ? named[:key] : SecureRandom.hex(20)
       self.port = named.include?(:port) ? named[:port] : 2016
       self.encrypt = named.include?(:encrypt) ? named[:encrypt] : true
+      self.allow_send = named.include?(:allow_send) ? named[:allow_send] : false
+      self.allow_get = named.include?(:allow_get) ? named[:allow_get] : false
       listen if named.include?(:start) && named[:start]
     end
 
     def encrypt= e
       @encrypt = e == true
+    end
+
+    def allow_send= e
+      @allow_send = e == true
+    end
+
+    def allow_get= e
+      @allow_get = e == true
     end
 
     def key= key
@@ -112,7 +122,11 @@ module Ava
     end
 
     def run_method object, method, *args, **named
-      if @objects.include?(object)
+      if object == :send_file
+        get_file named[:path], named[:bits], overwrite: named.delete(:overwrite)
+      elsif object == :get_file
+        send_file named[:path]
+      elsif @objects.include?(object)
         return {status: 401, error: "You are not authorized to run '#{method}' on '#{object}'."} unless validate_method(object, method)
         obj = @objects[object]
 
@@ -217,7 +231,10 @@ module Ava
           :restart,
           :running?,
           :registered_objects,
-          :required_gems
+          :required_gems,
+          :encrypt,
+          :allow_get,
+          :allow_send
         ]
         @cipher = OpenSSL::Cipher::Cipher.new('aes-256-cbc')
       end
@@ -243,6 +260,28 @@ module Ava
         dec = cipher.update msg[:encrypted]
         dec << cipher.final
         YAML.load(YAML.load(dec))
+      end
+
+      def send_file path
+        return {status: 401, error: "File sending is disabled on this server."} unless @allow_get
+        if File.exists?(path)
+          {status: 200, response: File.read(path)}
+        else
+          {status: 500, error: "File not found at '#{path}'."}
+        end
+      end
+
+      def get_file path, bits, overwrite: false
+        return {status: 401, error: "File retrieval is disabled on this server."} unless @allow_send
+        exists = !File.exists?(path)
+        if exists || overwrite
+          File.open(path, 'w') do |file|
+            file.write(bits)
+          end
+          {status: 200, response: File.exists?(path)}
+        else
+          {status: 500, error: "File already exists."}
+        end
       end
   end
 
