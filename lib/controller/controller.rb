@@ -188,6 +188,7 @@ module Ava
                   encrypt = false
                 end
                 response.hash_path_set 'time' => Time.now
+                clean_payload(response)
                 client.puts(encrypt ? encrypt_msg(remote_ip, response.to_yaml) : response.to_yaml)
                 client.close
               end
@@ -281,6 +282,15 @@ module Ava
           {status: 200, response: File.exists?(path)}
         else
           {status: 500, error: "File already exists."}
+        end
+      end
+      
+      # Convert unsupported objects that YAML cannot serialize
+      def clean_payload payload
+        bad = [Thread, Proc, Lambda]
+        keys = payload.squish.find_all{ |k,v| bad.include?(v.class)}.map{ |k,v| k }
+        keys.each do |path|
+          payload.hash_path_set :to_s, path
         end
       end
   end
