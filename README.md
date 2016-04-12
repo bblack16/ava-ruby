@@ -1,6 +1,6 @@
 # Meet Ava
 
-Ava allows you to remotely execute code from another Ruby process or another system, similar to DRb (but different). With Ava, you register individual objects and then white or black list methods to then be called remotely via Ava's client class. Ava is both simple and powerful.
+Ava allows you to remotely execute code from another Ruby process or another system, similar to DRb (but different). With Ava, you register individual objects and then white or black list methods to then be called remotely via Ava's client class. Ava is both simple, lightweight and powerful.
 
 See how it all works below! It's easy and (mostly) secure!
 
@@ -35,7 +35,7 @@ controller = Ava::Controller.new start: true, key: 'test', port: 2016
 * __start__: When the named argument start is set to true the server is automatically started during initialization. If this is not passed in, _start_ must be called later to initiate the server.
 * __key__: The secret key is the password that each client must have in order to authenticate. This is irrelevant if _encrypt_ is set to false as the key will not be needed.
 * __encrypt__: Settings this to true will ensure all content sent to clients is encrypted and require the key to authenticate.
-* __port__: Sets the TCP port for the server to run on. The default is 2016.
+* __port__: Sets the TCP port for the server to run on. The default is 2016. The port needs to be open for remote connections to work.
 
 Once the server is up and running it needs to have objects registered to it that it will allow remote control over. Any Ruby object can be added and will be referenced by the name provided during registration. Names must be unique.
 
