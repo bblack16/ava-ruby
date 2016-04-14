@@ -36,7 +36,8 @@ module Ava
     end
     
     def get_object name
-      Replicant.new name, self if registered_objects.include?(name)
+      raise ArgumentError, "No object is registered under the name '#{name}'." unless registered_objects.include?(name)
+      Replicant.new name, self
     end
 
     def registered_objects
