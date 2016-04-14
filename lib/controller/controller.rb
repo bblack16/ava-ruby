@@ -129,7 +129,13 @@ module Ava
       elsif @objects.include?(object)
         return {status: 401, error: "You are not authorized to run '#{method}' on '#{object}'."} unless validate_method(object, method)
         obj = @objects[object]
-        return {status:200, response:obj} if method.nil?
+        if method.nil?
+          if obj.nil?
+            return {status: 404, error: ArgumentErorr.new("No registered object matching '#{object}'.")}
+          else
+            return {status:200, response:obj} 
+          end
+        end
         a = !args.nil? && (!args.is_a?(Array) || !args.empty?)
         n = !named.nil? && !named.empty?
         begin
@@ -165,36 +171,40 @@ module Ava
             server = TCPServer.new(@port)
             loop do
               Thread.start(server.accept) do |client|
-                sock_domain, remote_port, remote_hostname, remote_ip = client.peeraddr
                 begin
-                  encrypt = true
-                  msg = decrypt_msg(remote_ip, YAML.load(client.recv(100000)))
-                  if msg[:controller] && msg[:controller][:secret_key]
-                    if msg[:controller][:secret_key][:args].first == @key
-                      response = {status:200, response: register_client(remote_ip)}
-                      encrypt = false
+                  sock_domain, remote_port, remote_hostname, remote_ip = client.peeraddr
+                  begin
+                    encrypt = true
+                    msg = decrypt_msg(remote_ip, YAML.load(client.recv(100000)))
+                    if msg[:controller] && msg[:controller][:secret_key]
+                      if msg[:controller][:secret_key][:args].first == @key
+                        response = {status:200, response: register_client(remote_ip)}
+                        encrypt = false
+                      else
+                        response = {status:401, error: ArgumentError.new('Invalid secret key.')}
+                        encrypt = false
+                      end
+                    elsif verify_connection(remote_ip, msg)
+                      response =  parse_command(msg)
                     else
-                      response = {status:401, error: ArgumentError.new('Invalid secret key.')}
+                      response = {status: 401, error: ArgumentError.new("Invalid or missing client ID.")}
                       encrypt = false
                     end
-                  elsif verify_connection(remote_ip, msg)
-                    response =  parse_command(msg)
-                  else
-                    response = {status: 401, error: ArgumentError.new("Invalid or missing client ID.")}
+                  rescue StandardError, Exception => e
+                    response = {status: 501, error: "#{e}\n#{e.backtrace.join}"}
                     encrypt = false
                   end
-                rescue StandardError, Exception => e
-                  response = {status: 501, error: "#{e}\n#{e.backtrace.join}"}
-                  encrypt = false
+                  response.hash_path_set 'time' => Time.now
+                  if msg[:raw] == true
+                    rawify(response)
+                  else
+                    clean_payload(response)
+                  end
+                  client.puts(encrypt ? encrypt_msg(remote_ip, response.to_yaml) : response.to_yaml)
+                ensure
+                  client.close
                 end
-                response.hash_path_set 'time' => Time.now
-                if msg[:raw] == true
-                  rawify(response)
-                else
-                  clean_payload(response)
-                end
-                client.puts(encrypt ? encrypt_msg(remote_ip, response.to_yaml) : response.to_yaml)
-                client.close
+                
               end
             end
           rescue StandardError, Exception => e
