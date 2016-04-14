@@ -129,7 +129,7 @@ module Ava
       elsif @objects.include?(object)
         return {status: 401, error: "You are not authorized to run '#{method}' on '#{object}'."} unless validate_method(object, method)
         obj = @objects[object]
-
+        return {status:200, response:obj} if method.nil?
         a = !args.nil? && (!args.is_a?(Array) || !args.empty?)
         n = !named.nil? && !named.empty?
         begin
@@ -188,7 +188,11 @@ module Ava
                   encrypt = false
                 end
                 response.hash_path_set 'time' => Time.now
-                clean_payload(response)
+                if msg[:raw] == true
+                  rawify(response)
+                else
+                  clean_payload(response)
+                end
                 client.puts(encrypt ? encrypt_msg(remote_ip, response.to_yaml) : response.to_yaml)
                 client.close
               end
@@ -287,10 +291,19 @@ module Ava
       
       # Convert unsupported objects that YAML cannot serialize
       def clean_payload payload
-        bad = [Thread, Proc, Lambda]
+        bad = [Thread, Proc]
         keys = payload.squish.find_all{ |k,v| bad.include?(v.class)}.map{ |k,v| k }
         keys.each do |path|
-          payload.hash_path_set :to_s, path
+          payload.hash_path_proc :to_s, path
+        end
+      end
+      
+      # Turns the payload in basic types only. This avoids reserialization to Objects on the client side
+      def rawify payload
+        accept = [NilClass, Numeric, Fixnum, Float, TrueClass, FalseClass, String, Symbol]
+        payload.squish.each do |path, value|
+          next if accept.include?(value.class)
+          payload.hash_path_proc :to_s, path
         end
       end
   end
