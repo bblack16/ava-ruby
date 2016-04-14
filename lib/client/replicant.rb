@@ -13,7 +13,7 @@ module Ava
     end
 
     def method_missing *args, **named
-      @client.send @object, args.first, *args[1..-1], **named
+      @client.request @object, args.first, *args[1..-1], **named
     end
 
   end
