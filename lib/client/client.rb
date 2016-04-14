@@ -34,6 +34,10 @@ module Ava
         false
       end
     end
+    
+    def get_object name
+      Replicant.new name, self if registered_objects.include?(name)
+    end
 
     def registered_objects
       request(:controller, :registered_objects)
@@ -66,10 +70,12 @@ module Ava
       end
     end
 
-    def request object, method, *args, **named
+    def request object, method = nil, *args, **named
+      return get_object(object) if method.nil?
       connect
+      raw = named.delete(:raw)
       argument = (named.nil? ? {} : named).merge({args:args})
-      request = {object => { method => argument }, client_id: @client_id[:key] }
+      request = {object => { method => argument }, client_id: @client_id[:key], raw: raw }
       @socket.puts encrypt_msg(request.to_yaml)
       lines = Array.new
       while line = @socket.gets
