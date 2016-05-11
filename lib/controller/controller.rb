@@ -133,7 +133,7 @@ module Ava
           if obj.nil?
             return {status: 404, error: ArgumentErorr.new("No registered object matching '#{object}'.")}
           else
-            return {status:200, response:obj} 
+            return {status:200, response:obj}
           end
         end
         a = !args.nil? && (!args.is_a?(Array) || !args.empty?)
@@ -194,17 +194,15 @@ module Ava
                     response = {status: 501, error: "#{e}\n#{e.backtrace.join}"}
                     encrypt = false
                   end
-                  response.hash_path_set 'time' => Time.now
+                  response[:time] = Time.now
                   if msg[:raw] == true
                     rawify(response)
-                  else
-                    clean_payload(response)
                   end
-                  client.puts(encrypt ? encrypt_msg(remote_ip, response.to_yaml) : response.to_yaml)
+                  client.puts(encrypt ? encrypt_msg(remote_ip, clean_payload(response.to_yaml)) : clean_payload(response.to_yaml))
                 ensure
                   client.close
                 end
-                
+
               end
             end
           rescue StandardError, Exception => e
@@ -298,16 +296,14 @@ module Ava
           {status: 500, error: "File already exists."}
         end
       end
-      
+
       # Convert unsupported objects that YAML cannot serialize
       def clean_payload payload
-        bad = [Thread, Proc]
-        keys = payload.squish.find_all{ |k,v| bad.include?(v.class)}.map{ |k,v| k }
-        keys.each do |path|
-          payload.hash_path_proc :to_s, path
-        end
+        bad = ['!ruby/object:Thread', '!ruby/object:Proc']
+        bad.each{ |w| payload.gsub!(w, '')}
+        payload
       end
-      
+
       # Turns the payload in basic types only. This avoids reserialization to Objects on the client side
       def rawify payload
         accept = [NilClass, Numeric, Fixnum, Float, TrueClass, FalseClass, String, Symbol]
