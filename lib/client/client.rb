@@ -34,7 +34,7 @@ module Ava
         false
       end
     end
-    
+
     def get_object name
       raise ArgumentError, "No object is registered under the name '#{name}'." unless registered_objects.include?(name)
       Replicant.new name, self
