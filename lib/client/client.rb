@@ -1,14 +1,13 @@
-require_relative  'replicant'
-
 module Ava
 
   class Client
-    attr_accessor :host, :port, :socket, :response
+    attr_accessor :host, :port, :socket, :response, :chains
 
     def initialize host: 'localhost', port: 2016, key: nil
       self.host = host
       self.port = port
       @client_id = {key: nil, iv: nil, encrypt: false}
+      @chains = Hash.new
       get_id(key) if key
     end
 
@@ -65,7 +64,7 @@ module Ava
 
     def method_missing *args, **named
       if args.size == 1 && (named == {} || named.nil?) && registered_objects.any?{ |o| o.to_sym == args.first}
-        Replicant.new args.first, self
+        get_object args.first
       else
         request args.first, args[1], *args[2..-1], **named
       end
@@ -85,6 +84,22 @@ module Ava
       @response = decrypt_msg(YAML.load(lines.join)).map{ |k,v| [k.to_sym, v]}.to_h
       close
       @response[:response] ? @response[:response] : (raise @response[:error])
+    end
+
+    def add_chain name = :default, chain
+      @chains[name] = chain if chain.all?{ |v| v.is_a?(::Hash) && v.include?(:method) }
+    end
+
+    def chain name
+      @chains[name]
+    end
+
+    def send_chain name = :default, object
+      chained_request(@chains[name], object)
+    end
+
+    def deep_send chain, object
+      request :controller, :deep_send, chain: chain, object: object
     end
 
     def send_file bits, save_to = ''

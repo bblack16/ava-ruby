@@ -2,7 +2,7 @@ module Ava
 
   class Controller
     attr_reader :objects, :blacklist, :whitelist, :key, :port, :thread, :connections,
-                :allowed_connections, :encrypt, :allow_send, :allow_get
+                :allowed_connections, :encrypt, :allow_send, :allow_get, :allow_deep_send
 
     def initialize *args, **named
       @objects, @connections = {}, {}
@@ -14,6 +14,7 @@ module Ava
       self.encrypt = named.include?(:encrypt) ? named[:encrypt] : true
       self.allow_send = named.include?(:allow_send) ? named[:allow_send] : false
       self.allow_get = named.include?(:allow_get) ? named[:allow_get] : false
+      self.allow_deep_send = named.include?(:allow_deep_send) ? named[:allow_deep_send] : true
       listen if named.include?(:start) && named[:start]
     end
 
@@ -27,6 +28,10 @@ module Ava
 
     def allow_get= e
       @allow_get = e == true
+    end
+
+    def allow_deep_send= e
+      @allow_deep_send = e == true
     end
 
     def key= key
@@ -97,7 +102,7 @@ module Ava
       blacklist object, :_all
     end
 
-    def blacklist_global *methods
+    def blacklist_method *methods
       @blacklist[:methods]+=methods
     end
 
@@ -154,6 +159,18 @@ module Ava
         end
       else
         {status: 404, error: "Object '#{object}' does not exist."}
+      end
+    end
+
+    def deep_send chain:, object:
+      if @allow_deep_send
+        if validate_method(object, chain.first[:method])
+          @objects[object].chain_send(*chain)
+        else
+          raise "The #{chain.first[:method]} is restricted for use on #{object} on this server."
+        end
+      else
+        raise "Access to the deep_send method is not allowed on this server"
       end
     end
 
@@ -247,7 +264,8 @@ module Ava
           :required_gems,
           :encrypt,
           :allow_get,
-          :allow_send
+          :allow_send,
+          :deep_send
         ]
         @cipher = OpenSSL::Cipher::Cipher.new('aes-256-cbc')
       end
