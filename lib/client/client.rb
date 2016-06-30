@@ -56,7 +56,7 @@ module Ava
         begin
           require gem
           [gem, true]
-        rescue
+        rescue Exception, StandardError => e
           [gem, false]
         end
       end.to_h
