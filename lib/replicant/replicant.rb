@@ -17,6 +17,14 @@ module Ava
       @client.request @object, method, *args, **named
     end
 
+    def to_chained_replicant chain
+      ChainedReplicant.new @object, @client, chain
+    end
+
+    def _get chain
+      to_chained_replicant(chain)
+    end
+
   end
 
 end
