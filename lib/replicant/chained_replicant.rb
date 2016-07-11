@@ -15,22 +15,17 @@ module Ava
       if chain.is_a?(::Array) && chain.all?{ |v| v.is_a?(::Hash) && v.include?(:method) }
         @chain = chain
       else
-        raise ArgumentError, "To set a chain, it must be either an array of hashes that must contain a :method key/value"
+        raise ::ArgumentError, "To set a chain, it must be either an array of hashes that must contain a :method key/value"
       end
     end
 
     def method_missing method, *args, **named
-      @client.set_chain :replicant, @chain.dup + [{method: method, args: args, named: named}]
-      @client.send_chain :replicant, @object
+      build = @chain + [{method: method, args: args, named: named}]
+      @client.deep_send build, @object
     end
 
-    def get_self
-      @client.set_chain :replicant, @chain
-      @client.send_chain :replicant, @object
-    end
-
-    def get method, *args, **named
-      ChainedReplicant.new(@object, @client, @chain.dup + [{method: method, args: args, named: named}])
+    def _self
+      @client.deep_send @chain, @object
     end
 
   end
