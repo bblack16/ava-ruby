@@ -1,11 +1,13 @@
 module Ava
 
   class Client
-    attr_accessor :host, :port, :socket, :response, :chains
+    attr_accessor :host, :port, :socket, :response, :chains, :save_key, :raw_mode
 
-    def initialize host: 'localhost', port: 2016, key: nil
+    def initialize host: 'localhost', port: 2016, key: nil, save_key: true, raw_mode: false
       self.host = host
       self.port = port
+      self.save_key = true
+      self.raw_mode = raw_mode
       @client_id = {key: nil, iv: nil, encrypt: false}
       @chains = Hash.new
       get_id(key) if key
@@ -23,13 +25,14 @@ module Ava
       @socket.close if defined?(@socket)
     end
 
-    def get_id key
+    def get_id key = @key
+      @key = key if @save_key
       @client_id[:encrypt] = false
-      response = request :controller, :secret_key, key
-      if response
-        @client_id = response
+      begin
+        @client_id = request :controller, :secret_key, key
         true
-      else
+      rescue
+        @client_id = {key: nil, iv: nil, encrypt: false}
         false
       end
     end
@@ -73,33 +76,38 @@ module Ava
     def request object, method = nil, *args, **named
       return get_object(object) if method.nil?
       connect
-      raw = named.delete(:raw)
-      argument = (named.nil? ? {} : named).merge({args:args})
-      request = {object => { method => argument }, client_id: @client_id[:key], raw: raw }
+
+      raw       = named.delete(:raw) || @raw_mode
+      rtry      = named.include?(:retry) ? named.delete(:retry) : true
+      argument  = (named.nil? ? {} : named).merge({args:args})
+      request   = {object => { method => argument }, client_id: @client_id[:key], raw: raw }
+
       @socket.puts encrypt_msg(request.to_yaml)
       lines = Array.new
       while line = @socket.gets
         lines << line
       end
+
       @response = decrypt_msg(YAML.load(lines.join)).map{ |k,v| [k.to_sym, v]}.to_h
       close
-      @response[:response] ? @response[:response] : (raise @response[:error])
-    end
 
-    def add_chain name = :default, chain
-      @chains[name] = chain if chain.all?{ |v| v.is_a?(::Hash) && v.include?(:method) }
-    end
+      if rtry && @response[:status] == 401 && @save_key && @key
+        if get_id
+          return request(object, method, *args, **named.merge(retry: false))
+        else
+          raise 'Failed to reauthenticate with the current saved key. Please call get_id with a valid key'
+        end
+      end
 
-    def chain name
-      @chains[name]
-    end
-
-    def send_chain name = :default, object
-      chained_request(@chains[name], object)
+      @response[:response] ? @response[:response] : (raise @response[:error].to_s)
     end
 
     def deep_send chain, object
       request :controller, :deep_send, chain: chain, object: object
+    end
+
+    def deep_send?
+      request :controller, :allow_deep_send
     end
 
     def send_file bits, save_to = ''
@@ -130,7 +138,7 @@ module Ava
     end
 
     def decrypt_msg msg
-      return msg if !@client_id[:encrypt] || !msg.include?(:encrypted)
+      return msg if !@client_id[:encrypt] || !msg.is_a?(Hash) ||!msg.include?(:encrypted)
       cipher = OpenSSL::Cipher::Cipher.new("aes-256-cbc")
       cipher.decrypt
       cipher.key = @client_id[:key]
