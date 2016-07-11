@@ -192,29 +192,42 @@ module Ava
                   sock_domain, remote_port, remote_hostname, remote_ip = client.peeraddr
                   begin
                     encrypt = true
-                    msg = decrypt_msg(remote_ip, YAML.load(client.recv(100000)))
+                    data = client.recv(100000)
+                    msg = decrypt_msg(remote_ip, YAML.load(data))
+
+                    # Handle registration requests
                     if msg[:controller] && msg[:controller][:secret_key]
+
+                      # Check to be sure the key matches
                       if msg[:controller][:secret_key][:args].first == @key
                         response = {status:200, response: register_client(remote_ip)}
                         encrypt = false
-                      else
+                      else # They key did not match, return an invalid response
                         response = {status:401, error: ArgumentError.new('Invalid secret key.')}
                         encrypt = false
                       end
+
+                    # Verify the connection to ensure the client is registered
                     elsif verify_connection(remote_ip, msg)
                       response =  parse_command(msg)
+
+                    # The client sent an invalid encryption key, reject it
                     else
                       response = {status: 401, error: ArgumentError.new("Invalid or missing client ID.")}
                       encrypt = false
                     end
+
                   rescue StandardError, Exception => e
-                    response = {status: 501, error: "#{e}\n#{e.backtrace.join}"}
+                    # Handle any errors that may not be caught and respond with a server error
+                    response = {status: 401, error: e}
                     encrypt = false
                   end
+
                   response[:time] = Time.now
-                  if msg[:raw] == true
+                  if msg && msg[:raw] == true
                     rawify(response)
                   end
+
                   client.puts(encrypt ? encrypt_msg(remote_ip, clean_payload(response.to_yaml)) : clean_payload(response.to_yaml))
                 ensure
                   client.close
@@ -265,7 +278,8 @@ module Ava
           :encrypt,
           :allow_get,
           :allow_send,
-          :deep_send
+          :deep_send,
+          :allow_deep_send
         ]
         @cipher = OpenSSL::Cipher::Cipher.new('aes-256-cbc')
       end
