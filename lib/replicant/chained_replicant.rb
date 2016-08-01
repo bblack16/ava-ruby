@@ -21,12 +21,18 @@ module Ava
 
     def method_missing method, *args, **named
       build = @chain + [{method: method, args: args, named: named}]
-      @client.deep_send build, @object
+      ChainedReplicant.new(@object, @client, build)
     end
 
     def _self
-      @client.deep_send @chain, @object
+      if @chain && !@chain.empty?
+        @client.deep_send @chain, @object
+      else
+        @client.get_object(object)
+      end
     end
+
+    alias_method :_send, :_self
 
   end
 
