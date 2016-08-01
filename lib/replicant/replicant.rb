@@ -17,9 +17,11 @@ module Ava
       @client.request @object, method, *args, **named
     end
 
-    def to_chained_replicant chain
-      ChainedReplicant.new @object, @client, chain
+    def to_chained_replicant chain = []
+      ChainedReplicant.new @object, @client, [chain].flatten(1)
     end
+
+    alias_method :tcr, :to_chained_replicant
 
     def _get chain
       to_chained_replicant(chain)
