@@ -131,8 +131,8 @@ module Ava
       cipher = OpenSSL::Cipher::Cipher.new("aes-256-cbc")
       cipher.encrypt
       cipher.key = @client_id[:key]
-      cipher.iv = @client_id[:iv]
-      enc = cipher.update msg.to_yaml
+      cipher.iv  = @client_id[:iv]
+      enc        = cipher.update msg.to_yaml
       enc << cipher.final
       {encrypted: enc, client_id: @client_id[:key]}.to_yaml
     end
@@ -142,8 +142,8 @@ module Ava
       cipher = OpenSSL::Cipher::Cipher.new("aes-256-cbc")
       cipher.decrypt
       cipher.key = @client_id[:key]
-      cipher.iv = @client_id[:iv]
-      dec = cipher.update msg[:encrypted]
+      cipher.iv  = @client_id[:iv]
+      dec        = cipher.update msg[:encrypted]
       dec << cipher.final
       YAML.load(YAML.load(dec))
     end
