@@ -2,39 +2,27 @@
 module Ava
 
   class Replicant < BasicObject
-    attr_accessor :object, :client
+    attr_accessor :_object, :_client
 
     def initialize object, client
-      self.object = object
-      self.client = client
+      self._object = object
+      self._client = client
     end
 
     def is_replicant?
       true
     end
 
-    def method_missing method, *args, **named
-      @client.request @object, method, *args, **named
+    def method_missing method, *args
+      @_client.request(object: @_object, method => args)
     end
 
     def to_chained_replicant chain = []
-      ChainedReplicant.new @object, @client, [chain].flatten(1)
+      ChainedReplicant.new @_object, @_client, [chain].flatten(1)
     end
 
     alias_method :tcr, :to_chained_replicant
 
-    def _get chain
-      to_chained_replicant(chain)
-    end
-
-  end
-
-end
-
-class Object
-
-  def is_replicant?
-    false
   end
 
 end
