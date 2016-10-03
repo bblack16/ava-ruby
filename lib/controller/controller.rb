@@ -63,6 +63,10 @@ module Ava
       @registry.delete(name.to_sym)
     end
 
+    def required_gems
+      Gem.loaded_specs.keys
+    end
+
     protected
 
       def lazy_setup
@@ -71,6 +75,7 @@ module Ava
         @whitelist   = { methods: Array.new, addresses: nil }
         @cipher      = OpenSSL::Cipher::Cipher.new('aes-256-cbc')
         @connections = Hash.new
+        blacklist_all_methods(:controller)
         whitelist_method(
           :port,
           :restart,
@@ -80,22 +85,18 @@ module Ava
           :encrypt,
           object: :controller
         )
-        blacklist_all_methods(:controller)
       end
 
       def listen
-        puts 'Listening'
         @thread = Thread.new{
           begin
             server = TCPServer.new(@port)
             loop do
               Thread.start(server.accept) do |client|
-                p 'Got connection'
                 begin
                   client.puts( handle_request(client) )
                 rescue StandardError => e
-                  puts e, e.backtrace
-                  client.puts( { status: 500, error: e } )
+                  client.puts( { status: 500, error: e }.to_yaml )
                 ensure
                   client.close
                 end
@@ -108,21 +109,16 @@ module Ava
       end
 
       def handle_request client
-        # p 'Got MSG from Client'
         remote_ip = client.peeraddr[3]
         msg = decrypt(remote_ip, YAML.load(client.recv(1000000000)))
-        p msg
+        return msg.to_yaml if msg[:status] == 404
         if msg[:secret_key]
-          p 1
           response = { status: 202, response: register_client(remote_ip, msg[:secret_key]) }
         elsif validate_connection(remote_ip, msg)
-          p 2
           response = run_command(msg)
         else
-          p 3
           response = { status: 401, error: ArgumentError.new('Invalid or missing client ID.') }
         end
-        # p "RESPONSE #{response}"
         encrypt(remote_ip, clean_payload(response.to_yaml), response)
       end
 
@@ -160,7 +156,6 @@ module Ava
 
       def encrypt addr, msg, response
         return msg if !@encrypt || response[:key] || response[:status] && [401, 202].any?{ |s| s == response[:status] }
-        puts "ENCRYPTING - #{msg} -- #{response}"
         cipher = get_cipher(addr, :encrypt)
         encrypted   = cipher.update(msg.to_yaml)
         encrypted << cipher.final
@@ -169,7 +164,7 @@ module Ava
 
       def decrypt addr, msg
         return msg unless @encrypt && msg.include?(:encrypted)
-        raise ArgumentError, "Unregistered client. You must get a client_id first for #{addr}." unless @connections.include?(addr)
+        return { status: 404, error: ArgumentError.new("Unregistered client. You must get a client_id first for #{addr}.") } unless @connections.include?(addr)
         cipher = get_cipher(addr, :decrypt)
         decrypted  = cipher.update msg[:encrypted]
         decrypted << cipher.final
@@ -194,7 +189,6 @@ module Ava
         begin
           object  = msg[:object]
           methods = msg[:methods]
-          puts "OBJECT: #{object} - #{methods}"
 
           if @registry.include?(object)
             object = @registry[object]
@@ -203,7 +197,6 @@ module Ava
               method = mth.keys.first
               args = mth.values.first
               return { status: 405, error: ArgumentError.new("You are not authorized to run '#{method}' on '#{object}'.") } unless validate_method(object, method)
-              p "#{method}(#{args})"
               object = object.send(method, *args)
             end
             return { status: 200, response: object }
@@ -211,8 +204,6 @@ module Ava
             return { status: 404, error: ArgumentError.new("No objected named '#{object}' found in registry.") }
           end
         rescue StandardError => e
-          p 9
-          puts e, e.backtrace
           return { status: 500, error: e }
         end
       end

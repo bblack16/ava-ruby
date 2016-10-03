@@ -1,5 +1,5 @@
 
-require 'bblib'
+require 'bblib' unless defined?(BBLib)
 require 'socket'
 require 'json'
 require 'yaml'

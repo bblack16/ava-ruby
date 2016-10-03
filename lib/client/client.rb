@@ -4,23 +4,21 @@ module Ava
 
     attr_string :host, default: 'localhost'
     attr_string :key, allow_nil: true
-    attr_bool :encrypt, default: true
+    attr_bool :encrypt, :sanitize_yaml, default: true
+    attr_bool :chain_mode, default: false
     attr_int_between 0, nil, :port, default: 2016
 
     def inspect
       "#<#{self.class}:#{self.object_id}>"
     end
 
-
-    def get_id key = @key
-      @key = key if @key =! key
+    def register key = @key
+      @key = key if @key != key
       @client_id[:encrypt] = false
       begin
         @client_id = request(secret_key: key)
-        puts "CLIENT - #{@client_id}"
         true
       rescue StandardError => e
-        puts "ERROR: #{e}; #{e.backtrace}"
         @client_id = { key: nil, iv: nil, encrypt: false }
         false
       end
@@ -31,7 +29,7 @@ module Ava
     end
 
     def required_gems
-      request(:controller, :required_gems)
+      request(object: :controller, methods: [{ required_gems: [] }])
     end
 
     def missing_gems
@@ -59,14 +57,10 @@ module Ava
 
     def object name
       raise ArgumentError, "No object is registered under the name '#{name}'." unless registry.include?(name)
-      Replicant.new name, self
+      !@chain_mode ? Replicant.new(name, self) : Replicant.new(name, self).tcr
     end
 
-    # def object_send obj, *methods
-    #   object(name).send()
-    # end
-
-    def request req
+    def request req, rtry: true
       begin
         connect
         @socket.puts encrypt(req.merge(client_id: @client_id[:key]).to_yaml)
@@ -74,12 +68,15 @@ module Ava
         while line = @socket.gets
           lines << line
         end
-        @response = decrypt(YAML.load(lines.join))
+        msg = YAML.load(lines.join)
+        @response = decrypt(msg)
           .map{ |k,v| [k.to_sym, v]}.to_h
       ensure
         close
       end
-      puts "RESPONSE FROM CNTL - #{@response}"
+      if rtry && (msg[:status] == 404 || msg[:status] == 401) # If authentication fails, try once more
+        return request(req, rtry: false) if register
+      end
       @response[:response] ? @response[:response] : (raise @response[:error].to_s)
     end
 
@@ -90,7 +87,7 @@ module Ava
       end
 
       def lazy_init *args
-        get_id(@key) if @key
+        register(@key) if @key
       end
 
       def connect
@@ -114,7 +111,7 @@ module Ava
         cipher    = get_cipher(:decrypt)
         decrypted = cipher.update msg[:encrypted]
         decrypted << cipher.final
-        YAML.load(YAML.load(decrypted))
+        YAML.load(sanitize_yaml(YAML.load(sanitize_yaml(decrypted))))
       end
 
       def get_cipher type
@@ -123,6 +120,21 @@ module Ava
         cipher.key = @client_id[:key]
         cipher.iv  = @client_id[:iv]
         return cipher
+      end
+
+      # This method goes through and removes any classes that are missing.
+      # This prevents psych from being unable to parse the response if it
+      # includes ruby objects.
+      # Somewhat experimental, but works in most cases so far
+      def sanitize_yaml msg
+        return msg unless @sanitize_yaml
+        msg.scan(/\!ruby\/object\:.*/).uniq.each do |obj|
+          klass = obj.sub('!ruby/object:','').strip.chomp
+          unless (Object.const_get(klass) rescue false)
+            msg = msg.gsub(/#{obj}.*/, '')
+          end
+        end
+        msg
       end
 
   end
