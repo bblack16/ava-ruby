@@ -1,18 +1,16 @@
-
-
+# frozen_string_literal: true
 module Ava
-
   class ChainedReplicant < Replicant
     attr_reader :_chain
 
-    def initialize object, client, chain
+    def initialize(object, client, chain)
       @_object = object
       @_client = client
       @_chain = chain
     end
 
-    def method_missing method, *args
-      build = @_chain + [{method => args}]
+    def method_missing(method, *args)
+      build = @_chain + [{ method => args }]
       ChainedReplicant.new(@_object, @_client, build)
     end
 
@@ -24,9 +22,7 @@ module Ava
       end
     end
 
-    alias_method :_send, :_self
-    alias_method :_s, :_self
-
+    alias _send _self
+    alias _s _self
   end
-
 end
