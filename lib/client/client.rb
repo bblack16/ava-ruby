@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 module Ava
-  class Client < BBLib::LazyClass
+  class Client
+    include BBLib::Effortless
+    
     attr_string :host, default: 'localhost'
     attr_string :key, allow_nil: true
     attr_bool :encrypt, :sanitize_yaml, default: true

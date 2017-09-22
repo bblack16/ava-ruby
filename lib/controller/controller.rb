@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 module Ava
-  class Controller < BBLib::LazyClass
+  class Controller
+    include BBLib::Effortless
+
     attr_string :key, default: 'changeme'
     attr_int_between 0, nil, :port, default: 2016
     attr_bool :encrypt, :allow_deep_send, default: true
