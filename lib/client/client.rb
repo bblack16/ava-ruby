@@ -2,7 +2,7 @@
 module Ava
   class Client
     include BBLib::Effortless
-    
+
     attr_string :host, default: 'localhost'
     attr_string :key, allow_nil: true
     attr_bool :encrypt, :sanitize_yaml, default: true
@@ -86,11 +86,11 @@ module Ava
 
     protected
 
-    def lazy_setup
+    def simple_setup
       @client_id = { key: nil, iv: nil, encrypt: false }
     end
 
-    def lazy_init(*_args)
+    def simple_init(*_args)
       register(@key) if @key
     end
 
