@@ -71,7 +71,7 @@ module Ava
 
     protected
 
-    def lazy_setup
+    def simple_setup
       @registry    = { controller: self }
       @blacklist   = { methods: [:eval], addresses: nil }
       @whitelist   = { methods: [], addresses: nil }
