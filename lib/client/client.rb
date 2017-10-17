@@ -9,18 +9,20 @@ module Ava
     attr_bool :chain_mode, default: false
     attr_int_between 0, nil, :port, default: 2016
 
+    attr_hash :client_id, private: true, default: { key: nil, iv: nil, encrypt: false }
+
     def inspect
       "#<#{self.class}:#{object_id}>"
     end
 
     def register(key = self.key)
       self.key = key if self.key != key
-      @client_id[:encrypt] = false
+      client_id[:encrypt] = false
       begin
-        @client_id = request(secret_key: key)
+        self.client_id = request(secret_key: key)
         true
       rescue StandardError => _e
-        @client_id = { key: nil, iv: nil, encrypt: false }
+        self.client_id = { key: nil, iv: nil, encrypt: false }
         false
       end
     end
@@ -68,7 +70,7 @@ module Ava
     def request(req, rtry: true)
       begin
         connect
-        @socket.puts encrypt(req.merge(client_id: @client_id[:key]).to_yaml)
+        @socket.puts encrypt(req.merge(client_id: client_id[:key]).to_yaml)
         lines = []
         while line = @socket.gets
           lines << line
@@ -86,12 +88,8 @@ module Ava
 
     protected
 
-    def simple_setup
-      @client_id = { key: nil, iv: nil, encrypt: false }
-    end
-
     def simple_init(*_args)
-      register(key) if key
+      # register(key) if key
     end
 
     def connect
@@ -103,7 +101,7 @@ module Ava
     end
 
     def encrypt(msg)
-      return msg unless @client_id[:encrypt]
+      return msg unless client_id[:encrypt]
       cipher    = get_cipher(:encrypt)
       encrypted = cipher.update msg.to_yaml
       encrypted << cipher.final
@@ -111,7 +109,7 @@ module Ava
     end
 
     def decrypt(msg)
-      return msg unless @client_id[:encrypt] && msg.is_a?(Hash) && msg[:encrypted]
+      return msg unless client_id[:encrypt] && msg.is_a?(Hash) && msg[:encrypted]
       cipher    = get_cipher(:decrypt)
       decrypted = cipher.update msg[:encrypted]
       decrypted << cipher.final
@@ -121,8 +119,8 @@ module Ava
     def get_cipher(type)
       cipher = OpenSSL::Cipher::Cipher.new('aes-256-cbc')
       cipher.send(type)
-      cipher.key = @client_id[:key]
-      cipher.iv  = @client_id[:iv]
+      cipher.key = client_id[:key]
+      cipher.iv  = client_id[:iv]
       cipher
     end
 
