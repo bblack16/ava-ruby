@@ -13,8 +13,8 @@ module Ava
       "#<#{self.class}:#{object_id}>"
     end
 
-    def register(key = @key)
-      @key = key if @key != key
+    def register(key = self.key)
+      self.key = key if self.key != key
       @client_id[:encrypt] = false
       begin
         @client_id = request(secret_key: key)
@@ -62,7 +62,7 @@ module Ava
 
     def object(name)
       raise ArgumentError, "No object is registered under the name '#{name}'." unless registry.include?(name)
-      !@chain_mode ? Replicant.new(name, self) : Replicant.new(name, self).tcr
+      !chain_mode ? Replicant.new(name, self) : Replicant.new(name, self).tcr
     end
 
     def request(req, rtry: true)
@@ -91,11 +91,11 @@ module Ava
     end
 
     def simple_init(*_args)
-      register(@key) if @key
+      register(key) if key
     end
 
     def connect
-      @socket = TCPSocket.open(@host, @port)
+      @socket = TCPSocket.open(host, port)
     end
 
     def close
@@ -131,7 +131,7 @@ module Ava
     # includes ruby objects.
     # Somewhat experimental, but works in most cases so far
     def sanitize_yaml(msg)
-      return msg unless @sanitize_yaml
+      return msg unless sanitize_yaml
       msg.scan(/\!ruby\/object\:.*/).uniq.each do |obj|
         klass = obj.sub('!ruby/object:', '').strip.chomp
         unless (Object.const_get(klass) rescue false)
