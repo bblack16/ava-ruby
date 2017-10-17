@@ -6,9 +6,9 @@ module Ava
     attr_string :host, default: 'localhost'
     attr_string :key, allow_nil: true
     attr_bool :encrypt, :sanitize_yaml, default: true
-    attr_bool :chain_mode, default: false
+    attr_bool :chain_mode, :registered, default: false
     attr_int_between 0, nil, :port, default: 2016
-
+    # Private
     attr_hash :client_id, private: true, default: { key: nil, iv: nil, encrypt: false }
 
     def inspect
@@ -20,7 +20,7 @@ module Ava
       client_id[:encrypt] = false
       begin
         self.client_id = request(secret_key: key)
-        true
+        self.registered = true
       rescue StandardError => _e
         self.client_id = { key: nil, iv: nil, encrypt: false }
         false
@@ -59,7 +59,7 @@ module Ava
     end
 
     def respond_to_missing?(method, include_private = false)
-      registry.any? { |o| o.to_sym == method } || super
+      registered && registry.any? { |o| o.to_sym == method } || super
     end
 
     def object(name)
@@ -89,7 +89,7 @@ module Ava
     protected
 
     def simple_init(*_args)
-      # register(key) if key
+      register(key) if key
     end
 
     def connect
