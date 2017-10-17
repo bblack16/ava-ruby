@@ -126,7 +126,7 @@ module Ava
 
     def register_client(addr, key)
       return "Your IP is not allowed: #{addr}" unless validate_ip(addr)
-      return { status: 401, error: ArgumentError.new('Invalid secret key.') } unless @key == key
+      return { status: 401, error: ArgumentError.new('Invalid secret key.') } unless self.key == key
       @connections[addr] = {
         key: Digest::SHA1.hexdigest("#{addr}|#{@key}"),
         iv: @cipher.random_iv,
